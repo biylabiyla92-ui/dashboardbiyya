@@ -10,15 +10,15 @@ def load_data():
     return df
 
 # ======================
-# FILTER DATA
+# FILTER DATA (UPDATED)
 # ======================
 def filter_data(df, year=None, location=None):
     if year:
         df = df[df['Date'].astype(str).str.contains(str(year))]
-    
-    if location and location != "Semua Provinsi":
-        df = df[df['Location'] == location]
-        
+
+    if location:
+        df = df[df['Location'].isin(location)]
+
     return df
 
 # ======================
@@ -31,9 +31,14 @@ def select_year():
         format_func=lambda x: "Semua Tahun" if x is None else str(x)
     )
 
+# 🔥 MULTI LOCATION
 def select_location(df):
-    locations = ["Semua Provinsi"] + sorted(df['Location'].unique())
-    return st.sidebar.selectbox("Pilih Provinsi", options=locations)
+    locations = sorted(df['Location'].unique())
+    return st.sidebar.multiselect(
+        "Pilih Provinsi",
+        options=locations,
+        default=locations
+    )
 
 # ======================
 # DATA TABLE
@@ -91,7 +96,7 @@ def pie_chart(df):
     st.plotly_chart(fig, use_container_width=True)
 
 # ======================
-# BAR CHART KEMATIAN (TOP 5)
+# BAR CHART KEMATIAN
 # ======================
 def bar_chart_top_death(df):
     df_last = get_last_data(df)
@@ -108,7 +113,7 @@ def bar_chart_top_death(df):
     return fig
 
 # ======================
-# BAR CHART SEMBUH (TOP 5)
+# BAR CHART SEMBUH
 # ======================
 def bar_chart_top_recovery(df):
     df_last = get_last_data(df)
@@ -145,7 +150,6 @@ def map_chart(df):
         title="Sebaran COVID-19 di Indonesia"
     )
 
-    # kostumisasi map
     fig.update_layout(mapbox_style="open-street-map")
 
     st.plotly_chart(fig, use_container_width=True)
