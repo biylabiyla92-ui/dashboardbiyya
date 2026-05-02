@@ -2,18 +2,28 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# load data
+# ======================
+# LOAD DATA
+# ======================
 def load_data():
     df = pd.read_csv("dataset/covid_19_indonesia_time_series_all.csv")
     return df
 
-# filter berdasarkan tahun
-def filter_data(df, year=None):
+# ======================
+# FILTER DATA
+# ======================
+def filter_data(df, year=None, location=None):
     if year:
         df = df[df['Date'].astype(str).str.contains(str(year))]
+    
+    if location and location != "Semua Provinsi":
+        df = df[df['Location'] == location]
+        
     return df
 
-# select tahun
+# ======================
+# SELECT BOX
+# ======================
 def select_year():
     return st.sidebar.selectbox(
         "Pilih Tahun",
@@ -21,59 +31,121 @@ def select_year():
         format_func=lambda x: "Semua Tahun" if x is None else str(x)
     )
 
-# tampil data
+def select_location(df):
+    locations = ["Semua Provinsi"] + sorted(df['Location'].unique())
+    return st.sidebar.selectbox("Pilih Provinsi", options=locations)
+
+# ======================
+# DATA TABLE
+# ======================
 def show_data(df):
     selected_columns = ['Location'] + list(df.loc[:, 'New Cases':'Total Recovered'].columns)
-    df_selected = df[selected_columns]
-
     st.subheader("Data Covid-19 Indonesia 🔴⚪")
-    st.dataframe(df_selected.head(10))
+    st.dataframe(df[selected_columns].head(10))
 
-# total kasus
+# ======================
+# AMBIL DATA TERAKHIR
+# ======================
+def get_last_data(df):
+    return df.sort_values('Date').groupby('Location', as_index=False).last()
+
+# ======================
+# TOTAL
+# ======================
 def total_case(df):
-    return df['Total Cases'].max()
+    return get_last_data(df)['Total Cases'].sum()
 
-# total kematian
 def total_death(df):
-    return df['Total Deaths'].max()
+    return get_last_data(df)['Total Deaths'].sum()
 
-# total sembuh
 def total_recovery(df):
-    return df['Total Recovered'].max()
+    return get_last_data(df)['Total Recovered'].sum()
 
-# tampilan kolom metric
+# ======================
+# METRIC
+# ======================
 def kolom(df):
-    kasus = total_case(df)
-    kematian = total_death(df)
-    sembuh = total_recovery(df)
-
     col1, col2, col3 = st.columns(3)
 
-    col1.metric("🟢 Total Kasus", f"{kasus/1000:,.1f}K")
-    col2.metric("⚫ Total Kematian", f"{kematian/1000:,.1f}K")
-    col3.metric("🟢 Total Sembuh", f"{sembuh/1000:,.1f}K")
-    
-    #piechart
-def pie_chart(df):
-    # ambil data
-    total_mati = total_death(df)
-    total_sembuh = total_recovery(df)
+    col1.metric("🟢 Total Kasus", f"{total_case(df)/1000:,.1f}K")
+    col2.metric("⚫ Total Kematian", f"{total_death(df)/1000:,.1f}K")
+    col3.metric("🟢 Total Sembuh", f"{total_recovery(df)/1000:,.1f}K")
 
-    # buat dataframe
+# ======================
+# PIE CHART
+# ======================
+def pie_chart(df):
     data = pd.DataFrame({
         'Status': ['Mati', 'Sembuh'],
-        'Jumlah': [total_mati, total_sembuh]
+        'Jumlah': [total_death(df), total_recovery(df)]
     })
 
-    # buat pie chart
     fig = px.pie(
         data,
         names='Status',
         values='Jumlah',
         title='Perbandingan Total Kematian dan Total Sembuh',
-        hole=0.5,
-        color_discrete_sequence=['#FF6B6B', '#4ECDC4']
+        hole=0.5
     )
 
-    # tampilkan
+    st.plotly_chart(fig, use_container_width=True)
+
+# ======================
+# BAR CHART KEMATIAN (TOP 5)
+# ======================
+def bar_chart_top_death(df):
+    df_last = get_last_data(df)
+    df_top5 = df_last.sort_values(by='Total Deaths', ascending=False).head(5)
+
+    fig = px.bar(
+        df_top5,
+        x='Location',
+        y='Total Deaths',
+        title='Top 5 Provinsi dengan Kematian Tertinggi',
+        text='Total Deaths'
+    )
+
+    return fig
+
+# ======================
+# BAR CHART SEMBUH (TOP 5)
+# ======================
+def bar_chart_top_recovery(df):
+    df_last = get_last_data(df)
+    df_top5 = df_last.sort_values(by='Total Recovered', ascending=False).head(5)
+
+    fig = px.bar(
+        df_top5,
+        x='Location',
+        y='Total Recovered',
+        title='Top 5 Provinsi dengan Kesembuhan Tertinggi',
+        text='Total Recovered'
+    )
+
+    return fig
+
+# ======================
+# MAP CHART
+# ======================
+def map_chart(df):
+    if df.empty:
+        st.warning("Data tidak tersedia")
+        return
+
+    df_last = get_last_data(df)
+
+    fig = px.scatter_mapbox(
+        df_last,
+        lat="Latitude",
+        lon="Longitude",
+        size="Total Cases",
+        color="Total Cases",
+        hover_name="Location",
+        zoom=4,
+        title="Sebaran COVID-19 di Indonesia"
+    )
+
+    # kostumisasi map
+    fig.update_layout(mapbox_style="open-street-map")
+
     st.plotly_chart(fig, use_container_width=True)
